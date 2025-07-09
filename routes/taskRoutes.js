@@ -1,6 +1,21 @@
 const express = require("express");
-const multer = require("multer");
 const auth = require("../middlewares/authMiddleware");
+
+let uploadTaskImage, handleUploadError;
+try {
+    const upMiddleware = require("../middlewares/upMiddleware");
+    uploadTaskImage = upMiddleware.uploadTaskImage;
+    handleUploadError = upMiddleware.handleUploadError;
+} catch (error) {
+    try {
+        const uploadMiddleware = require("../middlewares/uploadMiddleware");
+        uploadTaskImage = uploadMiddleware.uploadTaskImage;
+        handleUploadError = uploadMiddleware.handleUploadError;
+    } catch (fallbackError) {
+        console.error('Error cargando middlewares de upload:', fallbackError.message);
+    }
+}
+
 const {
   getTareas,
   getTareaById,
@@ -11,26 +26,24 @@ const {
 
 const router = express.Router();
 
-const storage = multer.memoryStorage();
-const upload = multer({
-  storage: storage,
-  limits: {
-    fileSize: 5 * 1024 * 1024 // 5MB
-  },
-  fileFilter: (req, file, cb) => {
-    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
-    if (allowedTypes.includes(file.mimetype)) {
-      cb(null, true);
-    } else {
-      cb(new Error('Tipo de archivo no permitido'), false);
-    }
-  }
-});
-
 router.get("/", auth, getTareas);
+
 router.get("/:id", auth, getTareaById);
-router.post("/", auth, upload.single('imagen'), crearTarea);
-router.put("/:id", auth, upload.single('imagen'), actualizarTarea);
+
+router.post("/", 
+    auth, 
+    uploadTaskImage,
+    handleUploadError,
+    crearTarea
+);
+
+router.put("/:id", 
+    auth,
+    uploadTaskImage,
+    handleUploadError,
+    actualizarTarea
+);
+
 router.delete("/:id", auth, eliminarTarea);
 
 module.exports = router;

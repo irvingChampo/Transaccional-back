@@ -56,19 +56,17 @@ exports.getTareaById = async (req, res) => {
 exports.crearTarea = async (req, res) => {
   try {
     const { base64Image, ...datosTarea } = req.body;
-
+    
     const nuevaTarea = {
       ...datosTarea,
       usuario_id: req.user.id
     };
-
+    
     let uploadResult = null;
-
-    // 🖼️ Manejar imagen de archivo (multipart)
+    
     if (req.file) {
-      console.log('🔍 Procesando imagen tradicional...');
       uploadResult = await ImageService.uploadImage(req.file);
-
+      
       if (!uploadResult.success) {
         return res.status(400).json({
           success: false,
@@ -76,22 +74,28 @@ exports.crearTarea = async (req, res) => {
           error: uploadResult.error
         });
       }
-    } 
-    // 🖼️ Manejar imagen base64
-    else if (base64Image && ImageService.isValidBase64Image(base64Image)) {
-      console.log('🔍 Procesando imagen base64...');
-      uploadResult = await ImageService.uploadBase64Image(base64Image);
-
-      if (!uploadResult.success) {
+    }
+    else if (base64Image) {
+      const isValid = ImageService.isValidBase64Image(base64Image);
+      
+      if (isValid) {
+        uploadResult = await ImageService.uploadBase64Image(base64Image);
+        
+        if (!uploadResult.success) {
+          return res.status(400).json({
+            success: false,
+            mensaje: "Error al subir la imagen base64",
+            error: uploadResult.error
+          });
+        }
+      } else {
         return res.status(400).json({
           success: false,
-          mensaje: "Error al subir la imagen base64",
-          error: uploadResult.error
+          mensaje: "Formato de imagen base64 inválido"
         });
       }
     }
-
-    // 📝 Agregar información de imagen si se subió exitosamente
+    
     if (uploadResult && uploadResult.success) {
       nuevaTarea.imagen_key = uploadResult.imageKey;
       nuevaTarea.imagen_metadata = {
@@ -101,26 +105,27 @@ exports.crearTarea = async (req, res) => {
         uploadedAt: new Date()
       };
     }
-
+    
     const tarea = new Task(nuevaTarea);
     await tarea.save();
-
+    
     const tareaConImagen = {
       ...tarea.toObject(),
       imagen_url: tarea.imagen_key ? ImageService.generateImageUrl(tarea.imagen_key) : null
     };
-
+    
     res.status(201).json({
       success: true,
       mensaje: "Tarea creada exitosamente",
       tarea: tareaConImagen
     });
-
+    
   } catch (error) {
-    console.error("Error al crear tarea:", error);
+    console.error('Error en crearTarea:', error);
     res.status(500).json({
       success: false,
-      mensaje: "Error del servidor"
+      mensaje: "Error del servidor",
+      error: error.message
     });
   }
 };
@@ -144,10 +149,7 @@ exports.actualizarTarea = async (req, res) => {
     let datosActualizar = { ...datosTarea };
     let imagenAnterior = tareaExistente.imagen_key;
 
-    // 🗑️ Eliminar imagen si se solicita
     if (eliminarImagen === true || eliminarImagen === "true") {
-      console.log('🔍 Eliminando imagen actual...');
-
       if (imagenAnterior) {
         await ImageService.deleteImage(imagenAnterior);
       }
@@ -155,10 +157,7 @@ exports.actualizarTarea = async (req, res) => {
       datosActualizar.imagen_key = null;
       datosActualizar.imagen_metadata = null;
     } 
-    // 🖼️ Subir nueva imagen
     else if (req.file || (base64Image && ImageService.isValidBase64Image(base64Image))) {
-      console.log('🔍 Subiendo nueva imagen...');
-
       let uploadResult = null;
 
       if (req.file) {
@@ -175,9 +174,7 @@ exports.actualizarTarea = async (req, res) => {
         });
       }
 
-      // Eliminar imagen anterior si existe
       if (imagenAnterior) {
-        console.log('🔍 Eliminando imagen anterior...');
         await ImageService.deleteImage(imagenAnterior);
       }
 
@@ -211,7 +208,8 @@ exports.actualizarTarea = async (req, res) => {
     console.error("Error al actualizar tarea:", error);
     res.status(500).json({
       success: false,
-      mensaje: "Error del servidor"
+      mensaje: "Error del servidor",
+      error: error.message
     });
   }
 };
@@ -230,9 +228,7 @@ exports.eliminarTarea = async (req, res) => {
       });
     }
 
-    // 🗑️ Eliminar imagen asociada si existe
     if (tarea.imagen_key) {
-      console.log('🔍 Eliminando imagen asociada...');
       await ImageService.deleteImage(tarea.imagen_key);
     }
 
@@ -245,7 +241,8 @@ exports.eliminarTarea = async (req, res) => {
     console.error("Error al eliminar tarea:", error);
     res.status(500).json({
       success: false,
-      mensaje: "Error del servidor"
+      mensaje: "Error del servidor",
+      error: error.message
     });
   }
 };

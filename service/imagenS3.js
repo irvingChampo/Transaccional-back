@@ -18,7 +18,7 @@ const IMAGES_FOLDER = process.env.S3_IMAGES_FOLDER || 'images/';
 const ALLOWED_TYPES = process.env.ALLOWED_FILE_TYPES?.split(',') || [
   'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'
 ];
-const MAX_FILE_SIZE = parseInt(process.env.MAX_FILE_SIZE || '5242880'); // 5MB
+const MAX_FILE_SIZE = parseInt(process.env.MAX_FILE_SIZE || '5242880');
 
 class ImageService {
   static validateImage(file) {
@@ -73,8 +73,6 @@ class ImageService {
 
   static async uploadImage(file) {
     try {
-      console.log('🔍 Subiendo archivo tradicional...');
-      
       const validation = this.validateImage(file);
       if (!validation.valid) {
         return {
@@ -100,8 +98,6 @@ class ImageService {
 
       const imageUrl = this.generateImageUrl(imageKey);
 
-      console.log('✅ Archivo subido exitosamente:', imageKey);
-
       return {
         success: true,
         imageUrl,
@@ -109,7 +105,7 @@ class ImageService {
       };
 
     } catch (error) {
-      console.error('❌ Error detallado al subir imagen tradicional:', error);
+      console.error('Error al subir imagen:', error);
       return {
         success: false,
         error: `Error interno del servidor al subir la imagen: ${error instanceof Error ? error.message : 'Error desconocido'}`
@@ -119,10 +115,7 @@ class ImageService {
 
   static async uploadBase64Image(base64String) {
     try {
-      console.log('🔍 Iniciando procesamiento de imagen Base64...');
-      
       if (!base64String || base64String.trim() === '') {
-        console.error('❌ Cadena Base64 vacía');
         return {
           success: false,
           error: "Cadena Base64 vacía"
@@ -131,7 +124,6 @@ class ImageService {
 
       const matches = base64String.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
       if (!matches || matches.length !== 3) {
-        console.error('❌ Formato Base64 inválido:', base64String.substring(0, 50) + '...');
         return {
           success: false,
           error: "Formato de imagen base64 inválido. Debe ser: data:image/tipo;base64,datos"
@@ -140,12 +132,8 @@ class ImageService {
 
       const mimeType = matches[1];
       const imageData = matches[2];
-      
-      console.log('🔍 Tipo MIME detectado:', mimeType);
-      console.log('🔍 Tamaño de datos Base64:', imageData.length, 'caracteres');
 
       if (!ALLOWED_TYPES.includes(mimeType)) {
-        console.error('❌ Tipo de archivo no permitido:', mimeType);
         return {
           success: false,
           error: `Tipo de archivo no permitido: ${mimeType}. Tipos válidos: ${ALLOWED_TYPES.join(', ')}`
@@ -156,19 +144,15 @@ class ImageService {
       try {
         imageBuffer = Buffer.from(imageData, 'base64');
       } catch (bufferError) {
-        console.error('❌ Error convirtiendo Base64 a Buffer:', bufferError);
         return {
           success: false,
           error: "Error al decodificar datos Base64"
         };
       }
-      
-      console.log('🔍 Tamaño del buffer:', imageBuffer.length, 'bytes', `(${(imageBuffer.length / 1024).toFixed(2)} KB)`);
 
       if (imageBuffer.length > MAX_FILE_SIZE) {
         const sizeMB = (imageBuffer.length / 1024 / 1024).toFixed(2);
         const maxSizeMB = (MAX_FILE_SIZE / 1024 / 1024).toFixed(2);
-        console.error(`❌ Archivo demasiado grande: ${sizeMB}MB > ${maxSizeMB}MB`);
         return {
           success: false,
           error: `Archivo demasiado grande: ${sizeMB}MB. Tamaño máximo: ${maxSizeMB}MB`
@@ -177,8 +161,6 @@ class ImageService {
 
       const extension = mimeType.split('/')[1];
       const imageKey = `${IMAGES_FOLDER}${uuidv4()}.${extension}`;
-      
-      console.log('🔍 Key generado:', imageKey);
 
       const uploadCommand = new PutObjectCommand({
         Bucket: BUCKET_NAME,
@@ -193,14 +175,9 @@ class ImageService {
         }
       });
 
-      console.log('🔍 Subiendo a S3...');
       await s3Client.send(uploadCommand);
 
       const imageUrl = this.generateImageUrl(imageKey);
-      
-      console.log('✅ Imagen Base64 subida exitosamente a S3');
-      console.log('✅ Key:', imageKey);
-      console.log('✅ URL generada:', imageUrl);
 
       return {
         success: true,
@@ -209,7 +186,7 @@ class ImageService {
       };
 
     } catch (error) {
-      console.error('❌ Error subiendo imagen base64:', error);
+      console.error('Error subiendo imagen base64:', error);
       
       let errorMessage = 'Error interno del servidor al subir la imagen';
       
@@ -250,15 +227,11 @@ class ImageService {
         return null;
       }
 
-      console.log('🔍 Extrayendo key de URL:', s3Url);
-
       const bucketPattern = new RegExp(`https://${BUCKET_NAME}\\.s3\\.[^/]+\\.amazonaws\\.com/(.+)`);
       const match = s3Url.match(bucketPattern);
       
       if (match && match[1]) {
-        const extractedKey = match[1];
-        console.log('✅ Key extraído:', extractedKey);
-        return extractedKey;
+        return match[1];
       }
 
       const urlParts = s3Url.split('/');
@@ -266,21 +239,17 @@ class ImageService {
       
       if (amazonIndex !== -1 && amazonIndex < urlParts.length - 1) {
         const keyParts = urlParts.slice(amazonIndex + 1);
-        const extractedKey = keyParts.join('/');
-        console.log('✅ Key extraído (método alternativo):', extractedKey);
-        return extractedKey;
+        return keyParts.join('/');
       }
       
-      console.log('⚠️ No se pudo extraer key de la URL');
       return null;
     } catch (error) {
-      console.error('❌ Error extrayendo key de URL:', error);
+      console.error('Error extrayendo key de URL:', error);
       return null;
     }
   }
 
   static async uploadMultipleImages(files) {
-    console.log('🔍 Subiendo múltiples imágenes:', files.length);
     const uploadPromises = files.map(file => this.uploadImage(file));
     return Promise.all(uploadPromises);
   }
@@ -294,8 +263,6 @@ class ImageService {
         };
       }
 
-      console.log('🔍 Eliminando imagen de S3:', imageKey);
-
       const deleteCommand = new DeleteObjectCommand({
         Bucket: BUCKET_NAME,
         Key: imageKey
@@ -303,16 +270,14 @@ class ImageService {
 
       await s3Client.send(deleteCommand);
 
-      console.log('✅ Imagen eliminada de S3 exitosamente:', imageKey);
       return { success: true };
 
     } catch (error) {
-      console.error('❌ Error eliminando imagen de S3:', error);
+      console.error('Error eliminando imagen de S3:', error);
       
       let errorMessage = 'Error al eliminar la imagen';
       if (error instanceof Error) {
         if (error.message.includes('NoSuchKey')) {
-          console.log('⚠️ La imagen ya no existe en S3:', imageKey);
           return { success: true }; 
         }
         errorMessage = error.message;
@@ -327,8 +292,6 @@ class ImageService {
 
   static async getSignedImageUrl(imageKey, expiresIn = 3600) {
     try {
-      console.log('🔍 Generando URL firmada para:', imageKey);
-
       const command = new GetObjectCommand({
         Bucket: BUCKET_NAME,
         Key: imageKey
@@ -336,18 +299,15 @@ class ImageService {
 
       const signedUrl = await getSignedUrl(s3Client, command, { expiresIn });
       
-      console.log('✅ URL firmada generada exitosamente');
       return signedUrl;
 
     } catch (error) {
-      console.error('❌ Error generando URL firmada:', error);
+      console.error('Error generando URL firmada:', error);
       throw new Error('Error generando URL firmada');
     }
   }
 
-  // 🆕 Método agregado para compatibilidad con el controlador
   static async getSignedUrl(imageKey, expiresIn = 3600) {
-    // Alias para mantener compatibilidad
     return this.getSignedImageUrl(imageKey, expiresIn);
   }
 
@@ -367,15 +327,13 @@ class ImageService {
       if (error instanceof Error && error.name === 'NoSuchKey') {
         return false;
       }
-      console.error('❌ Error verificando existencia de imagen:', error);
+      console.error('Error verificando existencia de imagen:', error);
       return false;
     }
   }
 
   static async getImageMetadata(imageKey) {
     try {
-      console.log('🔍 Obteniendo metadata de imagen:', imageKey);
-
       const command = new GetObjectCommand({
         Bucket: BUCKET_NAME,
         Key: imageKey
@@ -390,11 +348,10 @@ class ImageService {
         uploadedAt: new Date(response.Metadata?.uploadedat || response.Metadata?.uploadedAt || Date.now())
       };
 
-      console.log('✅ Metadata obtenida:', metadata);
       return metadata;
 
     } catch (error) {
-      console.error('❌ Error obteniendo metadata de imagen:', error);
+      console.error('Error obteniendo metadata de imagen:', error);
       return null;
     }
   }
